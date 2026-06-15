@@ -4,12 +4,13 @@ from pydantic import BaseModel
 import boto3
 import os
 from dotenv import load_dotenv
+import re
 
 load_dotenv()
 
 app = FastAPI()
 
-# Permitir que el Frontend hable con el Backend
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -18,7 +19,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Conectar con S3 usando las claves temporales del laboratorio
+
 s3_client = boto3.client(
     's3',
     region_name=os.getenv('AWS_REGION'),
@@ -32,7 +33,7 @@ class FileRequest(BaseModel):
     file_name: str
     file_size: int
 
-# SPRINT 1: Endpoint para generar URL firmada
+
 @app.post("/api/upload/presigned-url")
 def get_presigned_url(request: FileRequest):
     max_size = 14 * 1024 * 1024 # 14 MB límite para P-12
@@ -53,7 +54,7 @@ def get_presigned_url(request: FileRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# SPRINT 2: Endpoint para listar archivos
+
 @app.get("/api/files")
 def list_files():
     try:
@@ -71,7 +72,7 @@ def list_files():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# SPRINT 2: Endpoint para borrar archivos
+
 @app.delete("/api/files/{key:path}")
 def delete_file(key: str):
     try:
@@ -79,3 +80,32 @@ def delete_file(key: str):
         return {"message": "Borrado con éxito"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+class RenameRequest(BaseModel):
+    old_key: str
+    new_name: str
+
+@app.put("/api/files/rename")
+def rename_file(request: RenameRequest):
+    
+    safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '', request.new_name)
+    
+    
+    ext = os.path.splitext(safe_name)[1].lower()
+    allowed_extensions = ['.docx', '.odt', '.rtf']
+    if ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail="Extensión no permitida. Solo DOCX, ODT, RTF.")
+
+    new_key = f"uploads/{safe_name}"
+
+    try:
+        
+        copy_source = {'Bucket': BUCKET_NAME, 'Key': request.old_key}
+        s3_client.copy_object(CopySource=copy_source, Bucket=BUCKET_NAME, Key=new_key)
+        
+        
+        s3_client.delete_object(Bucket=BUCKET_NAME, Key=request.old_key)
+        
+        return {"message": "Archivo renombrado con éxito", "new_key": new_key}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error en AWS al renombrar el archivo")

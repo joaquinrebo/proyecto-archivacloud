@@ -63,6 +63,27 @@ function App() {
       fetchFiles()
     }
   }
+  const handleRename = async (oldKey, currentName) => {
+    const newName = prompt("Escribe el nuevo nombre del archivo (incluye la extensión .docx, .odt o .rtf):", currentName)
+    
+    if (!newName || newName === currentName) return // Si cancela o no cambia nada, no hacemos nada
+
+    try {
+      const res = await fetch("http://localhost:8000/api/files/rename", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ old_key: oldKey, new_name: newName })
+      })
+      
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail)
+      
+      alert("¡Nombre actualizado!")
+      fetchFiles() // Recargar la lista
+    } catch (error) {
+      alert("Error al renombrar: " + error.message)
+    }
+  }
 
   return (
     <div className="app-container">
@@ -106,26 +127,40 @@ function App() {
           <h2>Mis Archivos en S3</h2>
           
           {(!files || files.length === 0) ? (
-            <p className="empty-state">No hay archivos subidos aún.</p>
-          ) : (
-            <ul className="file-list">
-              {Array.isArray(files) && files.map(file => (
-                <li key={file.key} className="file-item">
-                  <div className="file-info">
-                    <span className="file-name">{file.name}</span>
-                    <span className="file-size">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
-                  </div>
-                  <button className="btn-delete" onClick={() => handleDelete(file.key)}>
-                    🗑️ Borrar
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+  <p className="empty-state">No hay archivos subidos aún.</p>
+) : (
+  <ul className="file-list">
+    {Array.isArray(files) && files.map(file => (
+      <li key={file.key} className="file-item">
+        <div className="file-info">
+          <span className="file-name">{file.name}</span>
+          <span className="file-size">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+        </div>
+        
+        {/* Aquí agrupamos los dos botones */}
+        <div className="file-actions">
+          <button 
+            className="btn-rename" 
+            onClick={() => handleRename(file.key, file.name)}
+            style={{ backgroundColor: "#f39c12", color: "white", border: "none", padding: "8px 14px", borderRadius: "4px", cursor: "pointer", marginRight: "10px", fontWeight: "bold" }}
+          >
+            ✏️ Renombrar
+          </button>
+          
+          <button className="btn-delete" onClick={() => handleDelete(file.key)}>
+            🗑️ Borrar
+          </button>
+        </div>
+        
+      </li>
+    ))}
+  </ul>
+)}
         </div>
       </main>
     </div>
   )
+  
 }
 
 export default App
